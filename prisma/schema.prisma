@@ -1,0 +1,149 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  EDITOR
+  CONTRIBUTOR
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum StoryStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  CHANGES_REQUESTED
+  APPROVED
+  SCHEDULED
+  PUBLISHED
+  REJECTED
+  ARCHIVED
+}
+
+enum AgeGroup {
+  ALL_AGES
+  AGES_6_9
+  AGES_10_12
+  AGES_13_17
+}
+
+enum ReviewDecision {
+  COMMENT
+  CHANGES_REQUESTED
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id                 String       @id @default(cuid())
+  name               String
+  email              String       @unique
+  passwordHash       String
+  role               Role         @default(CONTRIBUTOR)
+  status             UserStatus   @default(ACTIVE)
+  bio                String?
+  isAdultConfirmed   Boolean      @default(false)
+  termsAcceptedAt    DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  stories            Story[]
+  reviews            Review[]
+  revisions          StoryRevision[]
+  auditLogs           AuditLog[]
+
+  @@index([role, status])
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  stories     Story[]
+}
+
+model Story {
+  id              String          @id @default(cuid())
+  title           String
+  slug            String          @unique
+  summary         String
+  content         String          @db.Text
+  featuredImage   String?
+  authorId        String
+  categoryId      String
+  status          StoryStatus     @default(DRAFT)
+  ageGroup        AgeGroup        @default(ALL_AGES)
+  readingTime     Int             @default(1)
+  contentWarning  String?
+  editorNote      String?
+  rejectionReason String?
+  isFeatured      Boolean         @default(false)
+  submittedAt     DateTime?
+  approvedAt      DateTime?
+  scheduledAt     DateTime?
+  publishedAt     DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  author          User            @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  category        Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  reviews         Review[]
+  revisions       StoryRevision[]
+
+  @@index([status, publishedAt])
+  @@index([authorId, status])
+  @@index([categoryId, status])
+}
+
+model Review {
+  id         String         @id @default(cuid())
+  storyId    String
+  reviewerId String
+  decision   ReviewDecision @default(COMMENT)
+  comments   String         @db.Text
+  createdAt  DateTime       @default(now())
+  story      Story          @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  reviewer   User           @relation(fields: [reviewerId], references: [id], onDelete: Restrict)
+
+  @@index([storyId, createdAt])
+}
+
+model StoryRevision {
+  id         String   @id @default(cuid())
+  storyId    String
+  summary    String
+  content    String   @db.Text
+  editedById String
+  version    Int
+  createdAt  DateTime @default(now())
+  story      Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  editedBy   User     @relation(fields: [editedById], references: [id], onDelete: Restrict)
+
+  @@unique([storyId, version])
+  @@index([storyId, createdAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  details    Json?
+  createdAt  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
